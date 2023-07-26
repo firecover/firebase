@@ -1,5 +1,11 @@
 {
   "projects": {
     "default": "firecover-dev"
+  },
+  "targets": {},
+  "etags": {
+    "firecover-dev": {
+      "extensionInstances": {}
+    }
   }
 }
