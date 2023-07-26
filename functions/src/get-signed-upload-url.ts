@@ -1,13 +1,31 @@
 import { onRequest } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
-import { bucket } from "./init";
+import { bucket, firestore } from "./init";
 import { GetSignedUrlConfig } from "@google-cloud/storage";
 
 export const getSingedUploadURL = onRequest(async (request, response) => {
-  const payload = request.body;
-  logger.info(payload);
+  const { token, ref } = request.body as { token?: string; ref?: string };
+  logger.info(JSON.stringify({ token, ref }, null, 2));
 
-  const url = await generateSignedUrl("/test", 100);
+  if (!token || !ref) {
+    response.status(422).json({ message: "invalid token/ref" });
+    return;
+  }
+
+  const repoDoc = await firestore
+    .collection("repo-token-store")
+    .doc(token)
+    .get();
+  if (!repoDoc.exists) {
+    response.status(422).json({ message: "repo not configured" });
+    return;
+  }
+
+  const coverageReferenceDoc = repoDoc.ref.collection("coverage-uploads").doc();
+  const url = await generateSignedUrl(
+    `repo-coverages/${repoDoc.id}/${coverageReferenceDoc.id}.zip`,
+    5 * 60
+  );
   response.send({ url });
 });
 
