@@ -22,10 +22,23 @@ export const getSingedUploadURL = onRequest(async (request, response) => {
   }
 
   const coverageReferenceDoc = repoDoc.ref.collection("coverage-uploads").doc();
-  const url = await generateSignedUrl(
-    `repo-coverages/${repoDoc.id}/${coverageReferenceDoc.id}.zip`,
+
+  const uploadRefDocCreateTask = coverageReferenceDoc.create({
+    createdAt: new Date(),
+    ref,
+    state: "created",
+  });
+
+  const generateSignedUrlTask = generateSignedUrl(
+    `coverages/repo_${repoDoc.id}/${coverageReferenceDoc.id}.zip`,
     5 * 60
   );
+
+  const [url] = await Promise.all([
+    generateSignedUrlTask,
+    uploadRefDocCreateTask,
+  ]);
+
   response.send({ url });
 });
 
