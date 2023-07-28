@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { mkdirp } from "mkdirp";
 import { bucket } from "./init";
 import * as Zip from "adm-zip";
+import { readdir } from "node:fs/promises";
 
 class CoverageZip {
   private readonly processingTmpDirectory;
@@ -36,7 +37,30 @@ class CoverageZip {
     });
   }
 
-  private async getFileContent() {}
+  private async getZipContent(): Promise<{
+    componentCoverageFiles: string[];
+    aggregatedCoverageSummary: string;
+  }> {
+    const files = await readdir(this.processingTmpDirectory);
+    const componentCoverageFiles: string[] = [];
+    for (const file of files) {
+      if (file === "default.json") {
+        componentCoverageFiles.push(file);
+        continue;
+      }
+      if (file === "_aggregated-coverage-summary.json") {
+        // do nothing
+        continue;
+      }
+
+      componentCoverageFiles.push(file);
+    }
+
+    return {
+      componentCoverageFiles,
+      aggregatedCoverageSummary: "_aggregated-coverage-summary.json",
+    };
+  }
 
   private getIdFromGCSPath(gcsFilePath: string): string {}
 }
