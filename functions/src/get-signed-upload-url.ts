@@ -16,17 +16,14 @@ export const getSingedUploadURL = onRequest(
       return;
     }
 
-    const repoDoc = await firestore
-      .collection("repo-token-store")
-      .doc(token)
-      .get();
+    const repoDoc = await firestore.collection("repository").doc(token).get();
     if (!repoDoc.exists) {
       response.status(422).json({ message: "repo not configured" });
       return;
     }
 
     const coverageReferenceDoc = repoDoc.ref
-      .collection("coverage-uploads")
+      .collection("coverage-upload-references")
       .doc();
 
     const uploadRefDocCreateTask = coverageReferenceDoc.create({
@@ -36,7 +33,7 @@ export const getSingedUploadURL = onRequest(
     });
 
     const generateSignedUrlTask = generateSignedUrl(
-      `coverages/repo_${repoDoc.id}/${coverageReferenceDoc.id}.zip`,
+      `coverages/repo_${repoDoc.id}/${ref}/${coverageReferenceDoc.id}.zip`,
       5 * 60
     );
 
