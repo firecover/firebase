@@ -2,6 +2,7 @@ import { onRequest } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import { bucket, firestore } from "./init";
 import { GetSignedUrlConfig } from "@google-cloud/storage";
+import { timeAfter } from "./utils";
 
 export const getSingedUploadURL = onRequest(
   {
@@ -28,6 +29,7 @@ export const getSingedUploadURL = onRequest(
 
     const uploadRefDocCreateTask = coverageReferenceDoc.create({
       createdAt: new Date(),
+      deleteAt: timeAfter(28),
       ref,
       state: "created",
     });

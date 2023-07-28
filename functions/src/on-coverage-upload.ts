@@ -6,6 +6,7 @@ import { bucket, firestore } from "./init";
 import * as Zip from "adm-zip";
 import { readFile, readdir, rmdir } from "node:fs/promises";
 import * as logger from "firebase-functions/logger";
+import { timeAfter } from "./utils";
 
 class CoverageZip {
   private readonly processingTmpDirectory;
@@ -83,9 +84,11 @@ class CoverageZip {
           (await readFile(coverage.file)).toString()
         );
 
-        await coverageStorageCollection
-          .doc(coverage.componentName)
-          .set({ createdAt: new Date(), coverage: content });
+        await coverageStorageCollection.doc(coverage.componentName).set({
+          createdAt: new Date(),
+          coverage: content,
+          deleteAt: timeAfter(28),
+        });
       }
     );
 
@@ -99,9 +102,11 @@ class CoverageZip {
     ]);
 
     // save this last
-    await coverageStorageCollection
-      .doc("_aggregated-coverage-summary")
-      .set({ createdAt: new Date(), coverage: coverageSummaryContent });
+    await coverageStorageCollection.doc("_aggregated-coverage-summary").set({
+      createdAt: new Date(),
+      coverage: coverageSummaryContent,
+      deleteAt: timeAfter(28),
+    });
   }
 
   async cleanup_4() {
