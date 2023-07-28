@@ -31,7 +31,6 @@ export const getSingedUploadURL = onRequest(
       createdAt: new Date(),
       deleteAt: timeAfter(28),
       ref,
-      state: "created",
     });
 
     const generateSignedUrlTask = generateSignedUrl(
