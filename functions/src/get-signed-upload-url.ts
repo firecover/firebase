@@ -2,7 +2,7 @@ import { onRequest } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import { bucket } from "./init";
 import { GetSignedUrlConfig } from "@google-cloud/storage";
-import { timeAfter } from "./utils";
+import { timeAfter, urlSafeRef } from "./utils";
 import { gitRefCoverageDoc, repositoryDoc } from "./collections";
 
 export const getSingedUploadURL = onRequest(
@@ -10,13 +10,18 @@ export const getSingedUploadURL = onRequest(
     memory: "128MiB",
   },
   async (request, response) => {
-    const { token, ref } = request.body as { token?: string; ref?: string };
-    logger.info(JSON.stringify({ token, ref }, null, 2));
+    const { token, ref: rawRef } = request.body as {
+      token?: string;
+      ref?: string;
+    };
+    logger.info(JSON.stringify({ token, rawRef }, null, 2));
 
-    if (!token || !ref) {
+    if (!token || !rawRef) {
       response.status(422).json({ message: "invalid token/ref" });
       return;
     }
+
+    const ref = urlSafeRef(rawRef);
 
     const repoDoc = await repositoryDoc({ repositoryId: token }).get();
     if (!repoDoc.exists) {

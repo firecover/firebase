@@ -20,7 +20,7 @@ class CoverageZip {
   constructor(private readonly gcsFilePath: string) {
     const extractedValues = this.extractDetailsFromBucketPath(gcsFilePath);
     this.repositoryId = extractedValues.repoId;
-    this.gitRef = extractedValues.triggerRef;
+    this.gitRef = extractedValues.gitRef;
     this.uploadId = extractedValues.uploadRefId;
 
     const osTmpDirectory = tmpdir();
@@ -34,17 +34,17 @@ class CoverageZip {
 
   private extractDetailsFromBucketPath(gcsFilePath: string): {
     repoId: string;
-    triggerRef: string;
+    gitRef: string;
     uploadRefId: string;
   } {
     const segments = gcsFilePath.split("/");
     const repoId = segments[1].replace("repo_", "");
-    const triggerRef = segments[2];
+    const gitRef = segments[2];
     const uploadRefId = segments[3].replace(".zip", "");
 
     return {
       repoId,
-      triggerRef,
+      gitRef,
       uploadRefId,
     };
   }
