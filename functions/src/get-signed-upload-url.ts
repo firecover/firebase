@@ -1,8 +1,9 @@
 import { onRequest } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
-import { bucket, firestore } from "./init";
+import { bucket } from "./init";
 import { GetSignedUrlConfig } from "@google-cloud/storage";
 import { timeAfter } from "./utils";
+import { gitRefCoverageDoc, repositoryDoc } from "./collections";
 
 export const getSingedUploadURL = onRequest(
   {
@@ -17,15 +18,17 @@ export const getSingedUploadURL = onRequest(
       return;
     }
 
-    const repoDoc = await firestore.collection("repository").doc(token).get();
+    const repoDoc = await repositoryDoc({ repositoryId: token }).get();
     if (!repoDoc.exists) {
       response.status(422).json({ message: "repo not configured" });
       return;
     }
 
-    const coverageReferenceDoc = repoDoc.ref
-      .collection("coverage-upload-references")
-      .doc();
+    const coverageReferenceDoc = gitRefCoverageDoc({
+      repositoryId: repoDoc.id,
+      gitRef: ref,
+      coverageUploadId: null,
+    });
 
     const uploadRefDocCreateTask = coverageReferenceDoc.create({
       createdAt: new Date(),

@@ -2,36 +2,33 @@ import { onObjectFinalized } from "firebase-functions/v2/storage";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdirp } from "mkdirp";
-import { bucket, firestore } from "./init";
+import { bucket } from "./init";
 import * as Zip from "adm-zip";
 import { readFile, readdir, rmdir } from "node:fs/promises";
 import * as logger from "firebase-functions/logger";
 import { timeAfter } from "./utils";
+import { componentCoverageDoc, coverageSummaryDoc } from "./collections";
 
 class CoverageZip {
   private readonly processingTmpDirectory;
   private readonly zipTmpDirectory;
   private readonly zipFileLocation: string;
-  private readonly repoId: string;
-  private readonly triggerRef: string;
-  private readonly uploadRefId: string;
-
-  private readonly firestoreRepoDoc;
+  private readonly repositoryId: string;
+  private readonly gitRef: string;
+  private readonly uploadId: string;
 
   constructor(private readonly gcsFilePath: string) {
     const extractedValues = this.extractDetailsFromBucketPath(gcsFilePath);
-    this.repoId = extractedValues.repoId;
-    this.triggerRef = extractedValues.triggerRef;
-    this.uploadRefId = extractedValues.uploadRefId;
-
-    this.firestoreRepoDoc = firestore.collection("repository").doc(this.repoId);
+    this.repositoryId = extractedValues.repoId;
+    this.gitRef = extractedValues.triggerRef;
+    this.uploadId = extractedValues.uploadRefId;
 
     const osTmpDirectory = tmpdir();
     this.processingTmpDirectory = join(
       osTmpDirectory,
-      "process-" + this.uploadRefId
+      "process-" + this.uploadId
     );
-    this.zipTmpDirectory = join(osTmpDirectory, "zip-" + this.uploadRefId);
+    this.zipTmpDirectory = join(osTmpDirectory, "zip-" + this.uploadId);
     this.zipFileLocation = join(this.zipTmpDirectory, "compressed.zip");
   }
 
@@ -74,17 +71,18 @@ class CoverageZip {
     const { aggregatedCoverageSummary, componentCoverageFiles } =
       await this.getZipContent();
 
-    const coverageStorageCollection = this.firestoreRepoDoc
-      .collection("coverages")
-      .doc(this.triggerRef)
-      .collection(this.uploadRefId);
     const saveFileToFirestoreTasks = componentCoverageFiles.map(
       async (coverage) => {
         const content: JSONSummary = JSON.parse(
           (await readFile(coverage.file)).toString()
         );
 
-        await coverageStorageCollection.doc(coverage.componentName).set({
+        await componentCoverageDoc({
+          repositoryId: this.repositoryId,
+          gitRef: this.gitRef,
+          coverageUploadId: this.uploadId,
+          componentId: coverage.componentId,
+        }).set({
           createdAt: new Date(),
           coverage: content,
           deleteAt: timeAfter(28),
@@ -102,7 +100,11 @@ class CoverageZip {
     ]);
 
     // save this last
-    await coverageStorageCollection.doc("_aggregated-coverage-summary").set({
+    await coverageSummaryDoc({
+      repositoryId: this.repositoryId,
+      coverageUploadId: this.uploadId,
+      gitRef: this.gitRef,
+    }).set({
       createdAt: new Date(),
       coverage: coverageSummaryContent,
       deleteAt: timeAfter(28),
@@ -117,16 +119,15 @@ class CoverageZip {
   }
 
   private async getZipContent(): Promise<{
-    componentCoverageFiles: { componentName: string; file: string }[];
+    componentCoverageFiles: { componentId: string; file: string }[];
     aggregatedCoverageSummary: { file: string };
   }> {
     const files = await readdir(this.processingTmpDirectory);
-    const componentCoverageFiles: { componentName: string; file: string }[] =
-      [];
+    const componentCoverageFiles: { componentId: string; file: string }[] = [];
     for (const file of files) {
       if (file === "default.json") {
         componentCoverageFiles.push({
-          componentName: file,
+          componentId: file,
           file: join(this.processingTmpDirectory, file),
         });
         continue;
@@ -137,7 +138,7 @@ class CoverageZip {
       }
 
       componentCoverageFiles.push({
-        componentName: file,
+        componentId: file,
         file: join(this.processingTmpDirectory, file),
       });
     }
