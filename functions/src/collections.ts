@@ -1,6 +1,11 @@
 import { firestore } from "./init";
 
-const repositoryCollection = firestore.collection("repositories");
+
+export interface RepositoryDoc {
+  /** Name in the format `repoOwner/repoName` */
+  name: string;
+  createdAt: Date;
+}
 
 /** Doc: `repositories/{repositoryId}` */
 export function repositoryDoc({
@@ -8,6 +13,7 @@ export function repositoryDoc({
 }: {
   repositoryId: string | null;
 }) {
+  const repositoryCollection = firestore.collection("repositories");
   return repositoryId
     ? repositoryCollection.doc(repositoryId)
     : repositoryCollection.doc();
@@ -59,20 +65,20 @@ export function gitRefCoverageDoc({
 }
 
 /** Doc `repositories/{repositoryId}/git_refs/{gitRef}/coverage/{coverageUploadId}/components/{componentId}` */
-export function componentCoverageDoc({
+export function componentCoverageCollection({
   repositoryId,
   gitRef,
   coverageUploadId,
-  componentId,
 }: {
   repositoryId: string;
   gitRef: string;
   coverageUploadId: string;
-  componentId: string;
 }) {
-  return gitRefCoverageDoc({ repositoryId, gitRef, coverageUploadId })
-    .collection("components")
-    .doc(componentId);
+  return gitRefCoverageDoc({
+    repositoryId,
+    gitRef,
+    coverageUploadId,
+  }).collection("components");
 }
 
 /** Doc `repositories/{repositoryId}/git_refs/{gitRef}/coverage/{coverageUploadId}/summary/"summary"` */

@@ -2,7 +2,7 @@ import { onRequest } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import { bucket } from "./init";
 import { GetSignedUrlConfig } from "@google-cloud/storage";
-import { timeAfter, urlSafeRef } from "./utils";
+import { timeAfter, encodeGitRef } from "./utils";
 import { gitRefCoverageDoc, repositoryDoc } from "./collections";
 
 export const getSingedUploadURL = onRequest(
@@ -21,7 +21,7 @@ export const getSingedUploadURL = onRequest(
       return;
     }
 
-    const ref = urlSafeRef(rawRef);
+    const ref = encodeGitRef(rawRef);
 
     const repoDoc = await repositoryDoc({ repositoryId: token }).get();
     if (!repoDoc.exists) {

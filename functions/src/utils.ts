@@ -3,6 +3,10 @@ export function timeAfter(days: number, startDate = new Date()): Date {
   return new Date(startDate.getTime() + msToAdd);
 }
 
-export function urlSafeRef(gitRef: string) {
-  return gitRef.replaceAll("/", "__");
+export function encodeGitRef(gitRef: string) {
+  return btoa(gitRef);
+}
+
+export function decodeGitRef(gitRef: string) {
+  return atob(gitRef);
 }
