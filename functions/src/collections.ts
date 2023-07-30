@@ -34,16 +34,14 @@ export function gitRefDoc({
 export function commentDoc({
   repositoryId,
   gitRef,
-  commentId,
 }: {
   repositoryId: string;
   gitRef: string;
-  commentId: string | null;
 }) {
   const commentCollection = gitRefDoc({ repositoryId, gitRef }).collection(
     "comments"
   );
-  return commentId ? commentCollection.doc(commentId) : commentCollection.doc();
+  return commentCollection.doc("comment");
 }
 
 /** Collection `repositories/{repositoryId}/git_refs/{gitRef}/coverages` */

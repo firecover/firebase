@@ -3,12 +3,13 @@ import { decodeGitRef, encodeGitRef } from "./utils";
 import * as logger from "firebase-functions/logger";
 import {
   RepositoryDoc,
+  commentDoc,
   componentCoverageCollection,
   coverageSummaryDoc,
   gitRefCoverageCollection,
   repositoryDoc,
 } from "./collections";
-import { JSONSummary } from "./on-coverage-upload";
+import { FullCoverage, JSONSummary } from "./on-coverage-upload";
 
 export const onAggregatedCoverageSummaryCreated = onDocumentCreated(
   "repositories/{repositoryId}/git_refs/{gitRef}/coverage/{coverageUploadId}/summary/summary",
@@ -51,8 +52,145 @@ export const onAggregatedCoverageSummaryCreated = onDocumentCreated(
       coverageOfTargetRefTask,
       coverageOfSourceRefTask,
     ]);
+
+    if (!sourceCoverage) {
+      throw new Error(
+        "Source coverage missing " +
+          repositoryId +
+          "/" +
+          encodedGitRef +
+          "/" +
+          uploadId
+      );
+    }
+
+    const totalSummaryDiff = compareAndGetStatusOfSourceCoverage({
+      sourceCoverage: sourceCoverage.summary,
+      targetCoverage: targetCoverage?.summary,
+    });
+
+    if (totalSummaryDiff.diffAccumulation === 0) {
+      await commentDoc({
+        repositoryId,
+        gitRef: encodedGitRef,
+      }).set({
+        updatedAt: new Date(),
+        totalSummaryDiff: totalSummaryDiff.difference,
+        componentsCoverageDiff: null,
+        componentWiseFileCoverageDiff: null,
+      });
+      return;
+    }
+
+    const targetComponentIdComponentMapping = new Map(
+      targetCoverage?.components.map((component) => [
+        component.componentId,
+        component.coverage,
+      ])
+    );
+
+    const componentsCoverageDiff = sourceCoverage.components
+      .map((component) => {
+        const componentCoverageDiff = compareAndGetStatusOfSourceCoverage({
+          sourceCoverage: component.coverage.total,
+          targetCoverage: targetComponentIdComponentMapping.get(
+            component.componentId
+          )?.total,
+        });
+        if (componentCoverageDiff.diffAccumulation === 0) {
+          return;
+        }
+        return {
+          componentId: component.componentId,
+          componentCoverageDiff: componentCoverageDiff.difference,
+        };
+      })
+      .filter(
+        (
+          item
+        ): item is {
+          componentId: string;
+          componentCoverageDiff: Record<keyof FullCoverage, number>;
+        } => Boolean(item)
+      );
+
+    const componentWiseFileCoverageDiff = sourceCoverage.components?.map(
+      (component) => {
+        const targetComponentSummary = targetComponentIdComponentMapping.get(
+          component.componentId
+        );
+        if (!targetComponentSummary) {
+          throw new Error("todo");
+        }
+
+        const targetFileToCoverageMapping = new Map(
+          Object.entries(targetComponentSummary)
+        );
+
+        const fileCoverageDiff = Object.keys(component.coverage)
+          .map((file) => {
+            const diff = compareAndGetStatusOfSourceCoverage({
+              sourceCoverage: component.coverage[file],
+              targetCoverage: targetFileToCoverageMapping.get(file),
+            });
+
+            if (diff.diffAccumulation === 0) {
+              return;
+            }
+            return { file, diff: diff.difference };
+          })
+          .filter(
+            (
+              item
+            ): item is {
+              file: string;
+              diff: Record<keyof FullCoverage, number>;
+            } => Boolean(item)
+          );
+
+        return { componentId: component.componentId, fileCoverageDiff };
+      }
+    );
+
+    await commentDoc({
+      repositoryId,
+      gitRef: encodedGitRef,
+    }).set({
+      updatedAt: new Date(),
+      totalSummaryDiff: totalSummaryDiff.difference,
+      componentsCoverageDiff,
+      componentWiseFileCoverageDiff,
+    });
   }
 );
+
+function compareAndGetStatusOfSourceCoverage({
+  sourceCoverage,
+  targetCoverage,
+}: {
+  sourceCoverage: FullCoverage;
+  targetCoverage?: FullCoverage;
+}) {
+  let diffAccumulation = 0;
+
+  function getDiff(type: keyof FullCoverage) {
+    const diff =
+      sourceCoverage[type].pct -
+      (targetCoverage ? targetCoverage[type].pct : 0);
+    diffAccumulation += Math.abs(diff);
+    return diff;
+  }
+
+  const difference: Record<keyof FullCoverage, number> = {
+    branches: getDiff("branches"),
+    branchesTrue: getDiff("branchesTrue"),
+    functions: getDiff("functions"),
+    lines: getDiff("lines"),
+    statements: getDiff("statements"),
+  };
+
+  return { difference, diffAccumulation };
+}
 
 async function getTargetRefToCompare(
   repoName: string,
