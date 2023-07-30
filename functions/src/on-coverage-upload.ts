@@ -7,7 +7,7 @@ import * as Zip from "adm-zip";
 import { readFile, readdir, rmdir } from "node:fs/promises";
 import * as logger from "firebase-functions/logger";
 import { timeAfter } from "./utils";
-import { componentCoverageDoc, coverageSummaryDoc } from "./collections";
+import { componentCoverageCollection, coverageSummaryDoc } from "./collections";
 
 class CoverageZip {
   private readonly processingTmpDirectory;
@@ -77,22 +77,23 @@ class CoverageZip {
           (await readFile(coverage.file)).toString()
         );
 
-        await componentCoverageDoc({
+        await componentCoverageCollection({
           repositoryId: this.repositoryId,
           gitRef: this.gitRef,
           coverageUploadId: this.uploadId,
-          componentId: coverage.componentId,
-        }).set({
-          createdAt: new Date(),
-          coverage: content,
-          deleteAt: timeAfter(28),
-        });
+        })
+          .doc(coverage.componentId)
+          .set({
+            createdAt: new Date(),
+            coverage: content,
+            deleteAt: timeAfter(28),
+          });
       }
     );
 
     const coverageSummaryContentTask = readFile(
       aggregatedCoverageSummary.file
-    ).then((content) => JSON.parse(content.toString()) as FullCoverage);
+    ).then((content) => JSON.parse(content.toString()) as JSONSummary);
 
     const [coverageSummaryContent] = await Promise.all([
       coverageSummaryContentTask,

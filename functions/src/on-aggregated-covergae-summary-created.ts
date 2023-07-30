@@ -5,8 +5,10 @@ import {
   RepositoryDoc,
   componentCoverageCollection,
   coverageSummaryDoc,
+  gitRefCoverageCollection,
   repositoryDoc,
 } from "./collections";
+import { JSONSummary } from "./on-coverage-upload";
 
 export const onAggregatedCoverageSummaryCreated = onDocumentCreated(
   "repositories/{repositoryId}/git_refs/{gitRef}/coverage/{coverageUploadId}/summary/summary",
@@ -15,12 +17,12 @@ export const onAggregatedCoverageSummaryCreated = onDocumentCreated(
     const repositoryId = fireEvent.params.repositoryId;
     const uploadId = fireEvent.params.coverageUploadId;
 
-    const gitRef = decodeGitRef(encodedGitRef);
+    const decodedGitRef = decodeGitRef(encodedGitRef);
 
-    const pullNumber = getPullRequestNumberFromRef(gitRef);
+    const pullNumber = getPullRequestNumberFromRef(decodedGitRef);
 
     if (!pullNumber) {
-      logger.info(`Aborting: ${gitRef} is not a pull request`);
+      logger.info(`Aborting: ${decodedGitRef} is not a pull request`);
       return;
     }
 
@@ -30,12 +32,20 @@ export const onAggregatedCoverageSummaryCreated = onDocumentCreated(
     }
     const repoData = repoDoc.data() as RepositoryDoc;
 
-    const targetRef = await getTargetRefToCompare(repoData.name, pullNumber);
-
-    const coverageOfTargetRefTask = getLatestCoverageOfRef(
-      encodeGitRef(targetRef)
+    const targetRefDecoded = await getTargetRefToCompare(
+      repoData.name,
+      pullNumber
     );
-    const coverageOfSourceRefTask = getLatestCoverageOfRef(encodedGitRef);
+
+    const coverageOfTargetRefTask = getLatestCoverageOfRef({
+      repositoryId,
+      encodedRef: encodeGitRef(targetRefDecoded),
+    });
+    const coverageOfSourceRefTask = getLatestCoverageOfRef({
+      repositoryId,
+      encodedRef: encodedGitRef,
+      uploadId,
+    });
 
     const [targetCoverage, sourceCoverage] = await Promise.all([
       coverageOfTargetRefTask,
@@ -68,13 +78,19 @@ function getPullRequestNumberFromRef(decodedGitRef: string): number | null {
   return 5;
 }
 
-async function getLatestCoverageOfRef(
-  repositoryId: string,
-  encodedRef: string,
-  uploadId?: string
-) {
+async function getLatestCoverageOfRef({
+  repositoryId,
+  encodedRef,
+  uploadId,
+}: {
+  repositoryId: string;
+  encodedRef: string;
+  uploadId?: string;
+}) {
+  uploadId =
+    uploadId ?? (await getLatestUploadIdOfRef({ repositoryId, encodedRef }));
   if (!uploadId) {
-    throw new Error("tood");
+    return;
   }
 
   const getSummaryDocTask = coverageSummaryDoc({
@@ -83,5 +99,50 @@ async function getLatestCoverageOfRef(
     gitRef: encodedRef,
   }).get();
 
-  componentCoverageCollection;
+  const componentCoverageGetTask = componentCoverageCollection({
+    repositoryId,
+    gitRef: encodedRef,
+    coverageUploadId: uploadId,
+  }).get();
+
+  const [summaryDoc, componentCoverages] = await Promise.all([
+    getSummaryDocTask,
+    componentCoverageGetTask,
+  ]);
+
+  const summaryDocData = summaryDoc.data() as
+    | { coverage: JSONSummary }
+    | undefined;
+  if (!summaryDocData) return;
+
+  const coverage = {
+    summary: summaryDocData.coverage.total,
+    components: componentCoverages.docs.map((doc) => ({
+      componentId: doc.id,
+      coverage: (doc.data() as { coverage: JSONSummary }).coverage,
+    })),
+  };
+
+  return coverage;
+}
+
+async function getLatestUploadIdOfRef({
+  repositoryId,
+  encodedRef,
+}: {
+  repositoryId: string;
+  encodedRef: string;
+}) {
+  const latestRecordResponse = await gitRefCoverageCollection({
+    repositoryId,
+    gitRef: encodedRef,
+  })
+    .orderBy("createdAt", "desc")
+    .limit(1)
+    .get();
+  if (latestRecordResponse.empty) {
+    return;
+  }
+
+  return latestRecordResponse.docs[0].id;
 }

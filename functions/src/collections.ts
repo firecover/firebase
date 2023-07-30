@@ -46,7 +46,18 @@ export function commentDoc({
   return commentId ? commentCollection.doc(commentId) : commentCollection.doc();
 }
 
-/** Doc `repositories/{repositoryId}/git_refs/{gitRef}/coverage/{coverageUploadId}` */
+/** Collection `repositories/{repositoryId}/git_refs/{gitRef}/coverages` */
+export function gitRefCoverageCollection({
+  repositoryId,
+  gitRef,
+}: {
+  repositoryId: string;
+  gitRef: string;
+}) {
+  return gitRefDoc({ repositoryId, gitRef }).collection("coverages");
+}
+
+/** Doc `repositories/{repositoryId}/git_refs/{gitRef}/coverages/{coverageUploadId}` */
 export function gitRefCoverageDoc({
   repositoryId,
   gitRef,
@@ -56,15 +67,13 @@ export function gitRefCoverageDoc({
   gitRef: string;
   coverageUploadId: string | null;
 }) {
-  const coverageCollection = gitRefDoc({ repositoryId, gitRef }).collection(
-    "coverages"
-  );
+  const coverageCollection = gitRefCoverageCollection({ repositoryId, gitRef });
   return coverageUploadId
     ? coverageCollection.doc(coverageUploadId)
     : coverageCollection.doc();
 }
 
-/** Doc `repositories/{repositoryId}/git_refs/{gitRef}/coverage/{coverageUploadId}/components/{componentId}` */
+/** Collection `repositories/{repositoryId}/git_refs/{gitRef}/coverages/{coverageUploadId}/components` */
 export function componentCoverageCollection({
   repositoryId,
   gitRef,
@@ -81,7 +90,7 @@ export function componentCoverageCollection({
   }).collection("components");
 }
 
-/** Doc `repositories/{repositoryId}/git_refs/{gitRef}/coverage/{coverageUploadId}/summary/"summary"` */
+/** Doc `repositories/{repositoryId}/git_refs/{gitRef}/coverages/{coverageUploadId}/summary/"summary"` */
 export function coverageSummaryDoc({
   repositoryId,
   gitRef,
